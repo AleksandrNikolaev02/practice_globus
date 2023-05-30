@@ -8,7 +8,6 @@ import com.example.project.service.StudentService;
 import com.example.project.xsd.generated.com.example.requests.Request;
 import com.example.project.xsd.generated.com.example.response.Response;
 import com.example.project.xsd.generated.com.example.status.Status;
-import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.kafka.KafkaConstants;
@@ -49,11 +48,13 @@ public class Routes extends RouteBuilder {
     @Override
     public void configure() {
         final JaxbDataFormat jaxb = new JaxbDataFormat(Request.class.getPackage().getName());
+        try {
 
             onException(UnmarshalException.class)
             .handled(true)
             .setHeader("Status", simple("ERROR"))
-            .setBody(simple("Error unmarshal"));
+            .setBody(simple("Error unmarshal"))
+            .to("direct:status");
 
             //Request from Kafka
             from("kafka:" + kafkaConfig.getRequestTopic() + "?brokers=" + kafkaConfig.getBootstrapServers() +"&groupId=" + kafkaConfig.getGroupId())
@@ -126,6 +127,8 @@ public class Routes extends RouteBuilder {
                     .setHeader(KafkaConstants.KEY, simple("response"))
                     .to("kafka:" + kafkaConfig.getStatusTopic() + "?brokers=" + kafkaConfig.getBootstrapServers() +"&groupId=" + kafkaConfig.getGroupId())
                     .to("micrometer:timer:events.timer?action=stop");
-
+        } catch (RuntimeException exception) {
+            System.out.println(exception);
+        }
     }
 }
